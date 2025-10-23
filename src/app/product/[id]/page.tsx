@@ -1,5 +1,7 @@
 'use client';
-import { supabase } from '@/lib/supabaseClient';
+export const dynamic = 'force-dynamic';
+
+import { getSupabase } from '@/lib/supabaseClient';
 import { useEffect, useState } from 'react';
 
 export default function ProductPage({ params }: { params: { id: string } }) {
@@ -7,12 +9,15 @@ export default function ProductPage({ params }: { params: { id: string } }) {
   const [lots, setLots] = useState<any[]>([]);
   const [coas, setCoas] = useState<Record<string, any[]>>({});
 
-useEffect(() => {
+  useEffect(() => {
     (async () => {
+      const supabase = getSupabase();
       const { data: prod } = await supabase.from('products').select('*').eq('id', params.id).single();
       setProduct(prod);
+
       const { data: lotData } = await supabase.from('lots').select('*').eq('product_id', params.id);
       setLots(lotData || []);
+
       const map: Record<string, any[]> = {};
       for (const lot of lotData || []) {
         const { data: coaRows } = await supabase.from('lab_tests').select('*').eq('lot_id', lot.id);
@@ -22,7 +27,7 @@ useEffect(() => {
     })();
   }, [params.id]);
 
-  if (!product) return <p>Loading…</p>;
+  if (!product) return <p className="small">Loading…</p>;
 
   return (
     <div>
@@ -31,11 +36,26 @@ useEffect(() => {
         <div key={lot.id} className="card">
           <div className="badge">{lot.lot_code}</div>
           <p className="small">Status: {lot.status}</p>
-          {(coas[lot.id] || []).map(coa => (
-            <p key={coa.id}><a href={coa.pdf_url} target="_blank">View COA</a></p>
-          ))}
+          {(coas[lot.id] || []).length === 0 ? (
+            <p className="small">No COAs attached.</p>
+          ) : (
+            (coas[lot.id] || []).map(coa => (
+              <p key={coa.id}>
+                <a href={coa.pdf_url} target="_blank" rel="noreferrer">View COA</a>
+              </p>
+            ))
+          )}
+          <button className="button" onClick={() => addToCart(product.id)}>Add to cart</button>
         </div>
       ))}
     </div>
   );
+}
+
+function addToCart(productId: string) {
+  const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+  const idx = cart.findIndex((c: any) => c.productId === productId);
+  if (idx === -1) cart.push({ productId, qty: 1 }); else cart[idx].qty += 1;
+  localStorage.setItem('cart', JSON.stringify(cart));
+  alert('Added to cart');
 }

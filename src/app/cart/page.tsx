@@ -1,5 +1,7 @@
 'use client';
-import { supabase } from '@/lib/supabaseClient';
+export const dynamic = 'force-dynamic';
+
+import { getSupabase } from '@/lib/supabaseClient';
 import { useEffect, useState } from 'react';
 
 export default function CartPage() {
@@ -13,6 +15,7 @@ export default function CartPage() {
     (async () => {
       if (c.length === 0) return;
       const ids = c.map((i: any) => i.productId);
+      const supabase = getSupabase();
       const { data } = await supabase.from('products').select('*').in('id', ids);
       const map: Record<string, any> = {};
       (data || []).forEach((p: any) => (map[p.id] = p));
@@ -20,26 +23,33 @@ export default function CartPage() {
     })();
   }, []);
 
-  const total = cart.reduce((sum, i) => sum + i.qty * 1, 0); // placeholder
+  const total = cart.reduce((sum, i) => sum + i.qty * 1, 0); // placeholder pricing
 
   const placeOrder = async () => {
     setSubmitting(true);
-    const { data: session } = await supabase.auth.getSession();
-    if (!session.session) { alert('Please sign in first.'); setSubmitting(false); return; }
+    try {
+      const supabase = getSupabase();
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session) { alert('Please sign in first.'); setSubmitting(false); return; }
 
-    const { data: order, error } = await supabase
-      .from('orders')
-      .insert([{ status: 'submitted', created_at: new Date().toISOString() }])
-      .select()
-      .single();
-    if (error) { alert('Order error: ' + error.message); setSubmitting(false); return; }
+      const { data: order, error } = await supabase
+        .from('orders')
+        .insert([{ status: 'submitted', created_at: new Date().toISOString() }])
+        .select()
+        .single();
+      if (error) throw error;
 
-    const items = cart.map((i: any) => ({ order_id: order.id, product_id: i.productId, qty: i.qty, unit_price: 0 }));
-    const { error: itemErr } = await supabase.from('order_items').insert(items);
-    if (itemErr) { alert('Item error: ' + itemErr.message); setSubmitting(false); return; }
+      const items = cart.map((i: any) => ({ order_id: order.id, product_id: i.productId, qty: i.qty, unit_price: 0 }));
+      const { error: itemErr } = await supabase.from('order_items').insert(items);
+      if (itemErr) throw itemErr;
 
-    localStorage.removeItem('cart'); setCart([]);
-    alert('Order placed!'); setSubmitting(false);
+      localStorage.removeItem('cart'); setCart([]);
+      alert('Order placed!');
+    } catch (e: any) {
+      alert('Error: ' + e.message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
