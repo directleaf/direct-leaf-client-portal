@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 export const dynamic = 'force-dynamic';
 
 import { getSupabase } from '@/lib/supabaseClient';
@@ -27,7 +27,9 @@ export default function Catalog() {
   return (
     <div>
       <h2>Catalog</h2>
-      {loading ? <p className="small">Loading…</p> : (
+      {loading ? (
+        <p className="small">Loading…</p>
+      ) : (
         <div className="grid">
           {items.map(p => (
             <div className="card" key={p.id}>
@@ -37,7 +39,7 @@ export default function Catalog() {
               <p className="small">
                 Min order: {p.min_order_kg ?? 25} kg · Step: {p.order_increment_kg ?? 25} kg
               </p>
-              <Link className="button" href={`/product/${p.id}`}>
+              <Link className="button" href={/product/}>
                 View & choose kg
               </Link>
             </div>
