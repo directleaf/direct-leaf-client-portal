@@ -13,7 +13,10 @@ export default function Catalog() {
     (async () => {
       try {
         const supabase = getSupabase();
-        const { data, error } = await supabase.from('products').select('*').order('name');
+        const { data, error } = await supabase
+          .from('products')
+          .select('id, sku, name, form, min_order_kg, order_increment_kg')
+          .order('name');
         if (!error) setItems(data || []);
       } finally {
         setLoading(false);
@@ -31,7 +34,12 @@ export default function Catalog() {
               <div className="badge">{p.sku}</div>
               <h3>{p.name}</h3>
               <p className="small">{p.form || '—'}</p>
-              <Link className="button" href={`/product/${p.id}`}>View</Link>
+              <p className="small">
+                Min order: {p.min_order_kg ?? 25} kg · Step: {p.order_increment_kg ?? 25} kg
+              </p>
+              <Link className="button" href={`/product/${p.id}`}>
+                View & choose kg
+              </Link>
             </div>
           ))}
         </div>
