@@ -16,7 +16,7 @@ export default function Home() {
           : (process.env.NEXT_PUBLIC_SITE_URL || '');
       const { error } = await supabase.auth.signInWithOtp({
         email,
-        options: { emailRedirectTo: ${redirectBase}/catalog },
+        options: { emailRedirectTo: `${redirectBase}/catalog` }, // <-- backticks here
       });
       if (error) setMessage('Error: ' + error.message);
       else setMessage('Check your email for a login link.');
