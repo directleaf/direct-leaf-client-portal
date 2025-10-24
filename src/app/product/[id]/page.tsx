@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 export const dynamic = 'force-dynamic';
 
 import { getSupabase } from '@/lib/supabaseClient';
@@ -54,7 +54,6 @@ export default function ProductPage({ params }: { params: { id: string } }) {
     if (!product) return;
     const min = product.min_order_kg || 25;
     const step = product.order_increment_kg || 25;
-    // start at the minimum, aligned to the step
     setKg(min - (min % step || 0));
   }, [product]);
 
@@ -76,7 +75,6 @@ export default function ProductPage({ params }: { params: { id: string } }) {
 
   const addToCartKg = () => {
     const cart = JSON.parse(localStorage.getItem('cart') || '[]');
-    // store kg instead of “qty”
     const idx = cart.findIndex((c: any) => c.productId === product.id);
     if (idx === -1) cart.push({ productId: product.id, kg });
     else cart[idx].kg = cart[idx].kg + kg;
@@ -88,7 +86,6 @@ export default function ProductPage({ params }: { params: { id: string } }) {
     <div>
       <h2>{product.name}</h2>
 
-      {/* Lots with photo + COA */}
       {lots.map(lot => (
         <div key={lot.id} className="card" style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 16, marginBottom: 16 }}>
           <div>
@@ -123,7 +120,6 @@ export default function ProductPage({ params }: { params: { id: string } }) {
         </div>
       ))}
 
-      {/* Pricing tiers */}
       <div className="card" style={{ marginTop: 12 }}>
         <h3>Pricing</h3>
         {!tiers.length ? (
@@ -150,7 +146,6 @@ export default function ProductPage({ params }: { params: { id: string } }) {
         )}
       </div>
 
-      {/* Order panel */}
       <div className="card" style={{ marginTop: 12 }}>
         <h3>Order</h3>
         <p className="small">Minimum order {min} kg. Increments of {step} kg.</p>
