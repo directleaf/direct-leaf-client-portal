@@ -12,3 +12,4 @@ export default function ProductReset({ params }: { params: { id: string } }) {
     </div>
   );
 }
+
