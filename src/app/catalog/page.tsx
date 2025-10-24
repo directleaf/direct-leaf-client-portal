@@ -39,7 +39,7 @@ export default function Catalog() {
               <p className="small">
                 Min order: {p.min_order_kg ?? 25} kg · Step: {p.order_increment_kg ?? 25} kg
               </p>
-              <Link className="button" href={/product/}>
+              <Link className="button" href={`/product/${p.id}`}>
                 View & choose kg
               </Link>
             </div>
