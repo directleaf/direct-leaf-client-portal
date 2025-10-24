@@ -12,53 +12,41 @@ export default function ProductPage({ params }: { params: { id: string } }) {
   const [coas, setCoas] = useState<Record<string, any[]>>({});
   const [tiers, setTiers] = useState<Tier[]>([]);
   const [kg, setKg] = useState<number>(25);
-  const [errs, setErrs] = useState<string[]>([]);
 
   useEffect(() => {
     (async () => {
       const supabase = getSupabase();
-      const e: string[] = [];
 
-      // product
-      const prodRes = await supabase
+      const { data: prod } = await supabase
         .from('products')
         .select('*')
         .eq('id', params.id)
         .single();
-      if (prodRes.error) e.push('product: ' + prodRes.error.message);
-      setProduct(prodRes.data || null);
+      setProduct(prod);
 
-      // lots
-      const lotRes = await supabase
+      const { data: lotData } = await supabase
         .from('lots')
         .select('*')
         .eq('product_id', params.id)
         .order('received_date', { ascending: false });
-      if (lotRes.error) e.push('lots: ' + lotRes.error.message);
-      setLots(lotRes.data || []);
+      setLots(lotData || []);
 
-      // coas per lot
       const map: Record<string, any[]> = {};
-      for (const lot of lotRes.data || []) {
-        const coaRes = await supabase
+      for (const lot of lotData || []) {
+        const { data: coaRows } = await supabase
           .from('lab_tests')
           .select('*')
           .eq('lot_id', lot.id);
-        if (coaRes.error) e.push(`lab_tests(${lot.lot_code}): ` + coaRes.error.message);
-        map[lot.id] = coaRes.data || [];
+        map[lot.id] = coaRows || [];
       }
       setCoas(map);
 
-      // price tiers
-      const tiersRes = await supabase
+      const { data: priceRows } = await supabase
         .from('product_price_tiers')
         .select('min_kg,max_kg,price_per_kg')
         .eq('product_id', params.id)
         .order('min_kg', { ascending: true });
-      if (tiersRes.error) e.push('price_tiers: ' + tiersRes.error.message);
-      setTiers((tiersRes.data as Tier[]) || []);
-
-      setErrs(e);
+      setTiers((priceRows as Tier[]) || []);
     })();
   }, [params.id]);
 
@@ -77,28 +65,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
 
   const lineTotal = useMemo(() => +(kg * pricePerKg).toFixed(2), [kg, pricePerKg]);
 
-  // --- DEBUG PANEL ---
-  const Debug = () => (
-    <div className="card" style={{ background:'#0b1220', borderColor:'#243044', marginBottom:12 }}>
-      <h3>Debug</h3>
-      <pre className="small" style={{ whiteSpace:'pre-wrap' }}>
-id: {params.id}
-product? {product ? 'yes' : 'no'}
-lots: {lots.length}
-tiers: {tiers.length}
-errors: {errs.length ? errs.join(' | ') : 'none'}
-      </pre>
-    </div>
-  );
-
-  if (!product) {
-    return (
-      <div>
-        <Debug />
-        <p className="small">No product data. If you’re logged in, RLS may be blocking <code>products</code>. Make sure there is a <b>select</b> policy for the <b>authenticated</b> role on: products, lots, lab_tests, product_price_tiers.</p>
-      </div>
-    );
-  }
+  if (!product) return <p className="small">Loading…</p>;
 
   const min = product.min_order_kg || 25;
   const step = product.order_increment_kg || 25;
@@ -117,9 +84,7 @@ errors: {errs.length ? errs.join(' | ') : 'none'}
 
   return (
     <div>
-      <Debug />
-
-      <h2>{product.name}</h2>
+      <h2>{product.name} (v4)</h2>
 
       {lots.map(lot => (
         <div key={lot.id} className="card" style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 16, marginBottom: 16 }}>
@@ -158,7 +123,7 @@ errors: {errs.length ? errs.join(' | ') : 'none'}
       <div className="card" style={{ marginTop: 12 }}>
         <h3>Pricing</h3>
         {!tiers.length ? (
-          <p className="small">No pricing tiers configured or RLS blocked.</p>
+          <p className="small">No pricing tiers configured.</p>
         ) : (
           <table className="small" style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
