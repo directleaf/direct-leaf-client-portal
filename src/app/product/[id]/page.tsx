@@ -54,11 +54,20 @@ export default function ProductPage({ params }: { params: { id: string } }) {
     })();
   }, [params.id]);
 
+  // Compute total available across lots (if present)
+  const totalAvailable = useMemo(() => {
+    return (lots || []).reduce((sum, l) => {
+      const v = Number(l?.available_kg);
+      return sum + (Number.isFinite(v) ? v : 0);
+    }, 0);
+  }, [lots]);
+
   useEffect(() => {
     if (!product) return;
     const min = product.min_order_kg || 25;
     const step = product.order_increment_kg || 25;
-    setKg(min - (min % step || 0)); // start at minimum, aligned to step
+    const start = Math.max(min, min - (min % step || 0));
+    setKg(start);
   }, [product]);
 
   const activeTier = useMemo(() => {
@@ -74,16 +83,53 @@ export default function ProductPage({ params }: { params: { id: string } }) {
   const min = product.min_order_kg || 25;
   const step = product.order_increment_kg || 25;
 
-  const dec = () => setKg(v => Math.max(min, v - step));
-  const inc = () => setKg(v => v + step);
+  // Normalize a raw number into valid kg respecting min, step, and availability
+  const normalizeKg = (raw: number) => {
+    if (!Number.isFinite(raw)) return min;
+
+    // apply min
+    let v = Math.max(raw, min);
+
+    // snap to step (round to nearest multiple of step)
+    // If you prefer "ceil to next step", replace Math.round with Math.ceil
+    v = Math.round(v / step) * step;
+
+    // Optional: cap by available
+    // If totalAvailable is 0 (unknown), skip capping.
+    if (totalAvailable > 0) {
+      v = Math.min(v, totalAvailable);
+    }
+    return v;
+  };
+
+  const dec = () => setKg(prev => normalizeKg(prev - step));
+  const inc = () => setKg(prev => normalizeKg(prev + step));
+
+  // Handle manual input typing
+  const onInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = Number(e.target.value.replace(/,/g, ''));
+    // Don’t snap on every keystroke—just store the raw value for a smoother feel
+    if (Number.isFinite(val)) setKg(val);
+  };
+
+  // Snap on blur or Enter
+  const onInputBlur = () => setKg(v => normalizeKg(v));
+  const onInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.currentTarget.blur();
+    }
+  };
 
   const addToCartKg = () => {
+    const normalized = normalizeKg(kg);
+    setKg(normalized);
+
     const cart = JSON.parse(localStorage.getItem('cart') || '[]');
     const idx = cart.findIndex((c: any) => c.productId === product.id);
-    if (idx === -1) cart.push({ productId: product.id, kg });
-    else cart[idx].kg = cart[idx].kg + kg;
+    if (idx === -1) cart.push({ productId: product.id, kg: normalized });
+    else cart[idx].kg = (cart[idx].kg ?? 0) + normalized;
     localStorage.setItem('cart', JSON.stringify(cart));
-    alert(`Added ${kg} kg to cart`);
+    alert(`Added ${normalized.toLocaleString()} kg to cart`);
   };
 
   return (
@@ -141,7 +187,8 @@ export default function ProductPage({ params }: { params: { id: string } }) {
             </thead>
             <tbody>
               {tiers.map((t, i) => {
-                const isActive = activeTier && t.min_kg === activeTier.min_kg && (t.max_kg ?? null) === (activeTier.max_kg ?? null);
+                const isActive =
+                  kg >= t.min_kg && (t.max_kg == null || kg <= t.max_kg);
                 return (
                   <tr key={i} style={isActive ? { background:'#0b1220' } : undefined}>
                     <td style={{ padding: 6 }}>{t.min_kg}</td>
@@ -155,15 +202,32 @@ export default function ProductPage({ params }: { params: { id: string } }) {
         )}
       </div>
 
-      {/* Order panel */}
+      {/* Order panel with manual input */}
       <div className="card" style={{ marginTop: 12 }}>
         <h3>Order</h3>
-        <p className="small">Minimum order {min} kg. Increments of {step} kg.</p>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <p className="small">
+          Minimum order {min} kg. Increments of {step} kg{totalAvailable > 0 ? <>. Max available: {totalAvailable.toLocaleString()} kg</> : null}.
+        </p>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap:'wrap' }}>
           <button className="button" onClick={dec}>- {step}</button>
-          <div className="badge">{kg} kg</div>
+
+          <input
+            inputMode="numeric"
+            type="number"
+            step={step}
+            min={min}
+            value={kg}
+            onChange={onInputChange}
+            onBlur={onInputBlur}
+            onKeyDown={onInputKeyDown}
+            style={{ width: 140, padding: 8, borderRadius: 10, border: '1px solid #1f2833', background:'#0b1220', color:'#dce3ea' }}
+            aria-label="Order quantity (kg)"
+          />
+
           <button className="button" onClick={inc}>+ {step}</button>
         </div>
+
         <p className="small" style={{ marginTop: 8 }}>
           Price: ${pricePerKg.toFixed(2)} / kg · Line total: <b>${lineTotal.toLocaleString()}</b>
         </p>
