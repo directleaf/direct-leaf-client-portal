@@ -12,41 +12,53 @@ export default function ProductPage({ params }: { params: { id: string } }) {
   const [coas, setCoas] = useState<Record<string, any[]>>({});
   const [tiers, setTiers] = useState<Tier[]>([]);
   const [kg, setKg] = useState<number>(25);
+  const [errs, setErrs] = useState<string[]>([]);
 
   useEffect(() => {
     (async () => {
       const supabase = getSupabase();
+      const e: string[] = [];
 
-      const { data: prod } = await supabase
+      // product
+      const prodRes = await supabase
         .from('products')
         .select('*')
         .eq('id', params.id)
         .single();
-      setProduct(prod);
+      if (prodRes.error) e.push('product: ' + prodRes.error.message);
+      setProduct(prodRes.data || null);
 
-      const { data: lotData } = await supabase
+      // lots
+      const lotRes = await supabase
         .from('lots')
         .select('*')
         .eq('product_id', params.id)
         .order('received_date', { ascending: false });
-      setLots(lotData || []);
+      if (lotRes.error) e.push('lots: ' + lotRes.error.message);
+      setLots(lotRes.data || []);
 
+      // coas per lot
       const map: Record<string, any[]> = {};
-      for (const lot of lotData || []) {
-        const { data: coaRows } = await supabase
+      for (const lot of lotRes.data || []) {
+        const coaRes = await supabase
           .from('lab_tests')
           .select('*')
           .eq('lot_id', lot.id);
-        map[lot.id] = coaRows || [];
+        if (coaRes.error) e.push(`lab_tests(${lot.lot_code}): ` + coaRes.error.message);
+        map[lot.id] = coaRes.data || [];
       }
       setCoas(map);
 
-      const { data: priceRows } = await supabase
+      // price tiers
+      const tiersRes = await supabase
         .from('product_price_tiers')
         .select('min_kg,max_kg,price_per_kg')
         .eq('product_id', params.id)
         .order('min_kg', { ascending: true });
-      setTiers((priceRows as Tier[]) || []);
+      if (tiersRes.error) e.push('price_tiers: ' + tiersRes.error.message);
+      setTiers((tiersRes.data as Tier[]) || []);
+
+      setErrs(e);
     })();
   }, [params.id]);
 
@@ -54,7 +66,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
     if (!product) return;
     const min = product.min_order_kg || 25;
     const step = product.order_increment_kg || 25;
-    setKg(min - (min % step || 0)); // start at minimum, aligned to step
+    setKg(min - (min % step || 0));
   }, [product]);
 
   const pricePerKg = useMemo(() => {
@@ -65,7 +77,28 @@ export default function ProductPage({ params }: { params: { id: string } }) {
 
   const lineTotal = useMemo(() => +(kg * pricePerKg).toFixed(2), [kg, pricePerKg]);
 
-  if (!product) return <p className="small">Loading…</p>;
+  // --- DEBUG PANEL ---
+  const Debug = () => (
+    <div className="card" style={{ background:'#0b1220', borderColor:'#243044', marginBottom:12 }}>
+      <h3>Debug</h3>
+      <pre className="small" style={{ whiteSpace:'pre-wrap' }}>
+id: {params.id}
+product? {product ? 'yes' : 'no'}
+lots: {lots.length}
+tiers: {tiers.length}
+errors: {errs.length ? errs.join(' | ') : 'none'}
+      </pre>
+    </div>
+  );
+
+  if (!product) {
+    return (
+      <div>
+        <Debug />
+        <p className="small">No product data. If you’re logged in, RLS may be blocking <code>products</code>. Make sure there is a <b>select</b> policy for the <b>authenticated</b> role on: products, lots, lab_tests, product_price_tiers.</p>
+      </div>
+    );
+  }
 
   const min = product.min_order_kg || 25;
   const step = product.order_increment_kg || 25;
@@ -84,9 +117,10 @@ export default function ProductPage({ params }: { params: { id: string } }) {
 
   return (
     <div>
+      <Debug />
+
       <h2>{product.name}</h2>
 
-      {/* Lots with photo + COA */}
       {lots.map(lot => (
         <div key={lot.id} className="card" style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 16, marginBottom: 16 }}>
           <div>
@@ -121,11 +155,10 @@ export default function ProductPage({ params }: { params: { id: string } }) {
         </div>
       ))}
 
-      {/* Pricing tiers */}
       <div className="card" style={{ marginTop: 12 }}>
         <h3>Pricing</h3>
         {!tiers.length ? (
-          <p className="small">No pricing tiers configured.</p>
+          <p className="small">No pricing tiers configured or RLS blocked.</p>
         ) : (
           <table className="small" style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
@@ -148,7 +181,6 @@ export default function ProductPage({ params }: { params: { id: string } }) {
         )}
       </div>
 
-      {/* Order panel */}
       <div className="card" style={{ marginTop: 12 }}>
         <h3>Order</h3>
         <p className="small">Minimum order {min} kg. Increments of {step} kg.</p>
